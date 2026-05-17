@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist);
+}
+
+::selection {
+  background-color: rgb(168 85 247 / 0.3);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(2 6 23);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(88 28 135 / 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(107 33 168 / 0.7);
+}
