@@ -7,7 +7,7 @@ const LS_STORE = 'bitacora-suenos'
 
 function fallbackUrl(userId: string) {
   const params = new URLSearchParams({ 'checkout[custom][user_id]': userId })
-  return `https://${LS_STORE}.lemonsqueezy.com/buy/${VARIANT_ID}?${params}`
+  return `https://app.lemonsqueezy.com/checkout/buy/${VARIANT_ID}?${params}`
 }
 
 export async function POST() {
