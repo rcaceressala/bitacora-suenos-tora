@@ -4,6 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Anthropic from '@anthropic-ai/sdk'
+import {
+  FREE_LIMIT,
+  getSubscriptionStatus,
+  getMonthlyInterpretationCount,
+} from '@/lib/subscriptions'
 
 function traducirError(mensaje: string): string {
   const errores: Record<string, string> = {
@@ -57,6 +62,18 @@ export async function interpretarSueno(suenoId: string) {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return { error: 'No autenticado. Por favor inicia sesión de nuevo' }
+
+  // Verificar límite de plan
+  const { isActive } = await getSubscriptionStatus(supabase, user.id)
+  if (!isActive) {
+    const count = await getMonthlyInterpretationCount(supabase, user.id)
+    if (count >= FREE_LIMIT) {
+      return {
+        error: `Has alcanzado el límite de ${FREE_LIMIT} interpretaciones gratuitas este mes. Suscríbete para obtener interpretaciones ilimitadas.`,
+        limitReached: true,
+      }
+    }
+  }
 
   const { data: sueno } = await supabase
     .from('suenos')

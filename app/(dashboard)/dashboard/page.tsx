@@ -2,6 +2,11 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getVersoDelDia } from '@/lib/tehilim'
 import type { Sueno } from '@/lib/types'
+import {
+  getSubscriptionStatus,
+  getMonthlyInterpretationCount,
+} from '@/lib/subscriptions'
+import SubscriptionBanner from '../subscription-banner'
 
 function formatFecha(fecha: string) {
   return new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', {
@@ -53,6 +58,10 @@ function SuenoCard({ s }: { s: Sueno }) {
 export default async function DashboardPage() {
   const supabase = await createClient()
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   const { data } = await supabase
     .from('suenos')
     .select()
@@ -63,6 +72,14 @@ export default async function DashboardPage() {
   const interpretados = suenos.filter((s) => s.interpretacion).length
 
   const verso = getVersoDelDia()
+
+  // Datos de suscripción
+  const { isActive } = user
+    ? await getSubscriptionStatus(supabase, user.id)
+    : { isActive: false }
+  const usedThisMonth = user
+    ? await getMonthlyInterpretationCount(supabase, user.id)
+    : 0
 
   // Símbolo más frecuente (tabla opcional)
   let simboloFrecuente: string | null = null
@@ -79,6 +96,8 @@ export default async function DashboardPage() {
 
   return (
     <div>
+      <SubscriptionBanner isActive={isActive} usedThisMonth={usedThisMonth} />
+
       {/* Versículo diario de Tehilim */}
       <div className="mb-6 bg-gradient-to-r from-amber-900/30 to-purple-900/20 border border-amber-700/30 rounded-2xl p-4 sm:p-5">
         <div className="flex items-start gap-3">
