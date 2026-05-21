@@ -2,12 +2,11 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createCheckoutUrl } from '@/lib/lemonsqueezy'
 
-const VARIANT_ID = process.env.LEMONSQUEEZY_VARIANT_ID ?? '1686443'
-const LS_STORE = 'bitacora-suenos'
+const LS_BUY_URL = 'https://bitacora-suenos.lemonsqueezy.com/checkout/buy/6f3215d2-d721-41dc-8b98-2727148a3815'
 
 function fallbackUrl(userId: string) {
   const params = new URLSearchParams({ 'checkout[custom][user_id]': userId })
-  return `https://app.lemonsqueezy.com/checkout/buy/${VARIANT_ID}?${params}`
+  return `${LS_BUY_URL}?${params}`
 }
 
 export async function POST() {
