@@ -16,7 +16,8 @@ export async function POST() {
     const url = await createCheckoutUrl(user.email ?? '', user.id)
     return NextResponse.json({ url })
   } catch (err) {
-    console.error('Checkout error:', err)
-    return NextResponse.json({ error: 'Error al generar enlace de pago' }, { status: 500 })
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('Checkout error:', msg)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

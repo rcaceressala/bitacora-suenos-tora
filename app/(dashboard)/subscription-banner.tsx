@@ -10,6 +10,7 @@ interface Props {
 
 export default function SubscriptionBanner({ isActive, usedThisMonth }: Props) {
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   if (isActive) {
     return (
@@ -27,10 +28,21 @@ export default function SubscriptionBanner({ isActive, usedThisMonth }: Props) {
 
   async function handleSubscribe() {
     setLoading(true)
+    setError(null)
     try {
       const res = await fetch('/api/checkout', { method: 'POST' })
       const data = await res.json()
-      if (data.url) window.location.href = data.url
+      if (!res.ok) {
+        setError(data.error ?? 'Error al conectar con el sistema de pago')
+        return
+      }
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        setError('No se recibió URL de pago')
+      }
+    } catch {
+      setError('Error de red. Intenta nuevamente.')
     } finally {
       setLoading(false)
     }
@@ -57,13 +69,18 @@ export default function SubscriptionBanner({ isActive, usedThisMonth }: Props) {
           </p>
         </div>
       </div>
-      <button
-        onClick={handleSubscribe}
-        disabled={loading}
-        className="shrink-0 bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-xl transition"
-      >
-        {loading ? 'Redirigiendo…' : 'Suscribirse por CLP 5.990/mes'}
-      </button>
+      <div className="flex flex-col items-start sm:items-end gap-1">
+        {error && (
+          <p className="text-red-400 text-xs max-w-xs text-right">{error}</p>
+        )}
+        <button
+          onClick={handleSubscribe}
+          disabled={loading}
+          className="shrink-0 bg-purple-600 hover:bg-purple-500 disabled:opacity-60 text-white text-sm font-medium px-4 py-2 rounded-xl transition"
+        >
+          {loading ? 'Redirigiendo…' : 'Suscribirse por CLP 5.990/mes'}
+        </button>
+      </div>
     </div>
   )
 }
