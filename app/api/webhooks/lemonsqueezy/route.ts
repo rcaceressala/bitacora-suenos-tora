@@ -2,13 +2,27 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 
+export const dynamic = 'force-dynamic'
+
 function verifySignature(payload: string, signature: string): boolean {
   const secret = process.env.LEMONSQUEEZY_WEBHOOK_SECRET ?? ''
+  if (!secret) {
+    console.error('[webhook] LEMONSQUEEZY_WEBHOOK_SECRET no está configurado')
+    return false
+  }
+  if (!signature) {
+    console.error('[webhook] x-signature header ausente')
+    return false
+  }
   const hash = crypto.createHmac('sha256', secret).update(payload).digest('hex')
+  // timingSafeEqual requiere misma longitud — verificar antes
+  if (hash.length !== signature.length) {
+    console.error(`[webhook] Longitud de firma incorrecta: esperada ${hash.length}, recibida ${signature.length}`)
+    return false
+  }
   return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature))
 }
 
-// Mapa de status de Lemon Squeezy a nuestro status interno
 function mapStatus(lsStatus: string): string {
   if (lsStatus === 'active' || lsStatus === 'on_trial') return 'active'
   if (lsStatus === 'cancelled') return 'cancelled'
@@ -16,20 +30,33 @@ function mapStatus(lsStatus: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  console.log('[webhook] POST recibido')
+
   const payload = await req.text()
   const signature = req.headers.get('x-signature') ?? ''
 
-  try {
-    if (!verifySignature(payload, signature)) {
-      return NextResponse.json({ error: 'Firma inválida' }, { status: 401 })
-    }
-  } catch {
+  console.log('[webhook] signature header:', signature ? `${signature.slice(0, 10)}...` : '(vacío)')
+
+  if (!verifySignature(payload, signature)) {
+    console.error('[webhook] Firma inválida — rechazando')
     return NextResponse.json({ error: 'Firma inválida' }, { status: 401 })
   }
 
-  const event = JSON.parse(payload)
-  const eventName: string = event.meta?.event_name ?? ''
-  const userId: string = event.meta?.custom_data?.user_id ?? ''
+  let event: Record<string, unknown>
+  try {
+    event = JSON.parse(payload)
+  } catch {
+    console.error('[webhook] Payload no es JSON válido')
+    return NextResponse.json({ error: 'Payload inválido' }, { status: 400 })
+  }
+
+  const eventName: string = (event.meta as Record<string, unknown>)?.event_name as string ?? ''
+  const customData = (event.meta as Record<string, unknown>)?.custom_data as Record<string, string> | undefined
+  const userId: string = customData?.user_id ?? ''
+
+  console.log('[webhook] evento:', eventName)
+  console.log('[webhook] user_id:', userId || '(no encontrado)')
+  console.log('[webhook] custom_data completo:', JSON.stringify(customData))
 
   const subscriptionEvents = [
     'subscription_created',
@@ -41,22 +68,40 @@ export async function POST(req: NextRequest) {
     'subscription_unpaused',
   ]
 
-  if (!subscriptionEvents.includes(eventName) || !userId) {
+  if (!subscriptionEvents.includes(eventName)) {
+    console.log('[webhook] Evento ignorado (no es de suscripción):', eventName)
     return NextResponse.json({ ok: true })
   }
 
-  const attrs = event.data?.attributes ?? {}
-  const lsId: string = String(event.data?.id ?? '')
-  const status = mapStatus(attrs.status ?? '')
+  if (!userId) {
+    console.error('[webhook] user_id ausente en custom_data — no se puede actualizar subscription')
+    return NextResponse.json({ error: 'user_id requerido' }, { status: 400 })
+  }
+
+  const data = event.data as Record<string, unknown>
+  const attrs = (data?.attributes as Record<string, unknown>) ?? {}
+  const lsId: string = String(data?.id ?? '')
+  const lsStatus: string = (attrs.status as string) ?? ''
+  const status = mapStatus(lsStatus)
   const variantId: string = String(attrs.variant_id ?? '')
-  const endsAt: string | null = attrs.ends_at ?? null
+  const endsAt: string | null = (attrs.ends_at as string) ?? null
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  console.log('[webhook] LS status:', lsStatus, '→ interno:', status)
+  console.log('[webhook] lemon_squeezy_id:', lsId)
+  console.log('[webhook] variant_id:', variantId)
+  console.log('[webhook] ends_at:', endsAt)
 
-  const { error } = await supabase.from('subscriptions').upsert(
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceKey) {
+    console.error('[webhook] Variables de Supabase no configuradas:', { supabaseUrl: !!supabaseUrl, serviceKey: !!serviceKey })
+    return NextResponse.json({ error: 'Config error' }, { status: 500 })
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey)
+
+  const { error: upsertError } = await supabase.from('subscriptions').upsert(
     {
       user_id: userId,
       lemon_squeezy_id: lsId,
@@ -68,10 +113,11 @@ export async function POST(req: NextRequest) {
     { onConflict: 'user_id' }
   )
 
-  if (error) {
-    console.error('Supabase upsert error:', error)
-    return NextResponse.json({ error: 'DB error' }, { status: 500 })
+  if (upsertError) {
+    console.error('[webhook] Error upsert Supabase:', JSON.stringify(upsertError))
+    return NextResponse.json({ error: upsertError.message }, { status: 500 })
   }
 
+  console.log('[webhook] Subscription actualizada correctamente para user:', userId, '| status:', status)
   return NextResponse.json({ ok: true })
 }
