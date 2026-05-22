@@ -42,5 +42,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // Excluye archivos estáticos, imágenes, favicon y todas las rutas /api/*
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/).*)'],
 }
