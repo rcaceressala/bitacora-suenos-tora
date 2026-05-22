@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 function verifySignature(payload: string, signature: string): boolean {
   const secret = process.env.LEMONSQUEEZY_WEBHOOK_SECRET ?? ''
@@ -29,11 +30,11 @@ function mapStatus(lsStatus: string): string {
   return 'expired'
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: Request) {
   console.log('[webhook] POST recibido')
 
-  const payload = await req.text()
-  const signature = req.headers.get('x-signature') ?? ''
+  const payload = await request.text()
+  const signature = request.headers.get('x-signature') ?? ''
 
   console.log('[webhook] signature header:', signature ? `${signature.slice(0, 10)}...` : '(vacío)')
 
